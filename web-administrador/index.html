@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administrador</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        /* Contenedor de Login (centrado) */
+        #login-container {
+            max-width: 400px;
+            margin: 100px auto;
+            text-align: center;
+        }
+        /* Contenedor del Admin (se muestra al loguearse) */
+        #admin-container {
+            display: none; /* Oculto por defecto */
+        }
+        /* Clases para mostrar/ocultar secciones */
+        .hidden {
+            display: none;
+        }
+        h1, h2 {
+            color: #1a237e;
+        }
+        nav {
+            background: #e8eaf6;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        nav button {
+            background: #3f51b5;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 0 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        nav button:hover {
+            background: #303f9f;
+        }
+        nav button.active {
+            background: #1a237e;
+        }
+        input[type="text"], input[type="email"], input[type="password"], textarea, select {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        #logout-button {
+            background: #f44336;
+            float: right;
+        }
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+        li {
+            background: #fafafa;
+            border: 1px solid #eee;
+            padding: 10px;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        /* Estilos para botones de alumno y display de QR */
+        .alumno-botones {
+            display: flex;
+            gap: 5px;
+        }
+        .alumno-botones button {
+            padding: 5px 10px;
+            font-size: 12px;
+            margin-left: 5px;
+        }
+        button.qr-btn { background: #2196F3; }
+        button.codigo-btn { background: #ff9800; }
+        #qr-display {
+            padding: 20px;
+            margin-top: 15px;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            text-align: center;
+        }
+        #qr-display h4 { margin-top: 0; }
+        #qrcode-img {
+            width: 150px;
+            height: 150px;
+            margin: 10px auto 0;
+            /* Asegura que el QR se centre */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="login-container" class="container">
+        <h1>Iniciar Sesión</h1>
+        <form id="login-form">
+            <input type="email" id="login-email" placeholder="Email" required>
+            <input type="password" id="login-password" placeholder="Contraseña" required>
+            <button type="submit">Entrar</button>
+            <p id="login-error" style="color: red;"></p>
+        </form>
+    </div>
+
+    <div id="admin-container" class="container">
+        <button id="logout-button">Cerrar Sesión</button>
+        <h1>Panel de Administración</h1>
+        
+        <nav>
+            <button class="nav-button" data-section="grupos-section">Gestión de Grupos</button>
+            <button class="nav-button" data-section="alumnos-section">Gestión de Alumnos</button>
+            <button class="nav-button" data-section="avisos-section">Enviar Avisos</button>
+        </nav>
+
+        <section id="grupos-section" class="content-section">
+            <h2>Crear Nuevo Grupo</h2>
+            <form id="crear-grupo-form">
+                <input type="text" id="grupo-nombre" placeholder="Nombre del Grupo (ej. 1ro A)" required>
+                <button type="submit">Crear Grupo</button>
+            </form>
+            <hr>
+            <h2>Grupos Existentes</h2>
+            <ul id="lista-grupos">
+                </ul>
+        </section>
+
+        <section id="alumnos-section" class="content-section hidden">
+            <h2>Registrar Nuevo Alumno</h2>
+            <form id="crear-alumno-form">
+                <input type="text" id="alumno-nombre" placeholder="Nombre completo del Alumno" required>
+                <select id="alumno-grupo-select" required>
+                    <option value="">-- Asignar a un Grupo --</option>
+                    </select>
+                <button type="submit">Registrar Alumno</button>
+            </form>
+            <hr>
+            <h2>Alumnos Registrados</h2>
+            <ul id="lista-alumnos">
+                </ul>
+
+            <div id="qr-display" class="hidden">
+                <h4 id="qr-nombre"></h4>
+                <div id="qrcode-img"></div>
+                <small>Este es el QR para escanear la <strong>asistencia</strong> (AppAsistencia).</small>
+            </div>
+
+        </section>
+
+        <section id="avisos-section" class="content-section hidden">
+            <h2>Crear Nuevo Aviso</h2>
+            <form id="crear-aviso-form">
+                <input type="text" id="aviso-titulo" placeholder="Título del Aviso" required>
+                <textarea id="aviso-mensaje" rows="4" placeholder="Mensaje..." required></textarea>
+                <select id="aviso-destino" required>
+                    <option value="todos">Para TODOS (Escuela Completa)</option>
+                    </select>
+                <button type="submit">Guardar y Enviar Notificación</button>
+            </form>
+            <hr>
+            <h2>Avisos Enviados</h2>
+            <ul id="lista-avisos">
+                </ul>
+        </section>
+    </div>
+
+
+    <script type="module">
+        // --- 1. CONFIGURACIÓN E INICIALIZACIÓN DE FIREBASE ---
+        
+        // Importa las funciones que necesitas de los SDKs
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { 
+            getAuth, 
+            onAuthStateChanged, 
+            signInWithEmailAndPassword, 
+            signOut 
+        } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { 
+            getFirestore, 
+            collection, 
+            addDoc, 
+            getDocs,
+            doc,
+            updateDoc,
+            serverTimestamp 
+        } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        // TODO: Pega tu configuración de Firebase aquí
+        const firebaseConfig = {
+        apiKey: "AIzaSyD0ix66ppFXSf7u0Y68LSgKFZgibLaGDps",
+        authDomain: "python-escolar.firebaseapp.com",
+        projectId: "python-escolar",
+        storageBucket: "python-escolar.firebasestorage.app",
+        messagingSenderId: "182241356835",
+        appId: "1:182241356835:web:789db81f76e5e08d679596",
+        measurementId: "G-ZTJQXN0KE2"
+        };
+
+        // Inicializa Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // --- URL DEL SERVIDOR FLASK ---
+        // ¡¡¡CAMBIA ESTA IP POR LA DE TU PC!!!
+        const IP_FLASK = "http://192.168.0.42:5000"; 
+
+        // Referencias a colecciones
+        const gruposCol = collection(db, "grupos");
+        const alumnosCol = collection(db, "alumnos");
+        const avisosCol = collection(db, "avisos");
+        const codigosCol = collection(db, "codigosInvitacion");
+
+        // --- 2. LÓGICA DE AUTENTICACIÓN Y ESTADO DE LA APP ---
+
+        const loginContainer = document.getElementById("login-container");
+        const adminContainer = document.getElementById("admin-container");
+        const loginForm = document.getElementById("login-form");
+        const loginError = document.getElementById("login-error");
+        const logoutButton = document.getElementById("logout-button");
+
+        // Escucha cambios en el estado de autenticación
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // Usuario logueado
+                loginContainer.style.display = "none";
+                adminContainer.style.display = "block";
+                loginError.textContent = "";
+                // Cargar datos iniciales
+                cargarGrupos();
+                cargarAlumnos();
+                cargarAvisos();
+            } else {
+                // Usuario no logueado
+                loginContainer.style.display = "block";
+                adminContainer.style.display = "none";
+            }
+        });
+
+        // Manejador del formulario de login
+        loginForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const email = document.getElementById("login-email").value;
+            const password = document.getElementById("login-password").value;
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                // onAuthStateChanged se encargará de mostrar el panel
+            } catch (error) {
+                console.error("Error de login:", error.message);
+                loginError.textContent = "Error: " + error.message;
+            }
+        });
+
+        // Manejador del botón de logout
+        logoutButton.addEventListener("click", async () => {
+            try {
+                await signOut(auth);
+            } catch (error) {
+                console.error("Error de logout:", error);
+            }
+        });
+
+
+        // --- 3. LÓGICA DE NAVEGACIÓN (TABS) ---
+
+        const navButtons = document.querySelectorAll(".nav-button");
+        const contentSections = document.querySelectorAll(".content-section");
+
+        navButtons.forEach(button => {
+            button.addEventListener("click", () => {
+                const targetSectionId = button.getAttribute("data-section");
+
+                // Oculta todas las secciones
+                contentSections.forEach(section => {
+                    section.classList.add("hidden");
+                });
+
+                // Muestra la sección objetivo
+                document.getElementById(targetSectionId).classList.remove("hidden");
+
+                // (Opcional) Resalta el botón activo
+                navButtons.forEach(btn => btn.classList.remove("active"));
+                button.classList.add("active");
+            });
+        });
+        // Activa la primera sección por defecto
+        if(navButtons.length > 0) {
+            navButtons[0].click();
+        }
+
+
+        // --- 4. LÓGICA DE GESTIÓN DE GRUPOS ---
+
+        const crearGrupoForm = document.getElementById("crear-grupo-form");
+        const listaGrupos = document.getElementById("lista-grupos");
+        const alumnoGrupoSelect = document.getElementById("alumno-grupo-select");
+        const avisoDestinoSelect = document.getElementById("aviso-destino");
+
+        crearGrupoForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const nombre = document.getElementById("grupo-nombre").value;
+            if (!nombre) return;
+
+            try {
+                await addDoc(gruposCol, {
+                    nombre: nombre
+                });
+                crearGrupoForm.reset();
+                cargarGrupos(); // Recarga la lista
+            } catch (error) {
+                console.error("Error al crear grupo:", error);
+            }
+        });
+
+        async function cargarGrupos() {
+            listaGrupos.innerHTML = "Cargando...";
+            // Limpia los <select>
+            alumnoGrupoSelect.innerHTML = '<option value="">-- Asignar a un Grupo --</option>'; 
+            avisoDestinoSelect.innerHTML = '<option value="todos">Para TODOS (Escuela Completa)</option>'; 
+
+            try {
+                const querySnapshot = await getDocs(gruposCol);
+                listaGrupos.innerHTML = ""; // Limpia la lista actual
+                
+                querySnapshot.forEach((doc) => {
+                    const grupo = doc.data();
+                    const id = doc.id;
+                    
+                    // Añade a la lista de grupos
+                    const li = document.createElement("li");
+                    li.textContent = grupo.nombre;
+                    listaGrupos.appendChild(li);
+
+                    // Añade a los <select>
+                    const option = document.createElement("option");
+                    option.value = id;
+                    option.textContent = grupo.nombre;
+                    alumnoGrupoSelect.appendChild(option);
+
+                    const optionAviso = document.createElement("option");
+                    optionAviso.value = id; // Usamos el ID del grupo
+                    optionAviso.textContent = `Solo al Grupo: ${grupo.nombre}`;
+                    avisoDestinoSelect.appendChild(optionAviso.cloneNode(true)); // Clona para el otro select
+                });
+            } catch (error) {
+                console.error("Error al cargar grupos:", error);
+                listaGrupos.innerHTML = "Error al cargar grupos.";
+            }
+        }
+
+
+        // --- 5. LÓGICA DE GESTIÓN DE ALUMNOS (ACTUALIZADA) ---
+
+        const crearAlumnoForm = document.getElementById("crear-alumno-form");
+        const listaAlumnos = document.getElementById("lista-alumnos");
+        const qrDisplay = document.getElementById("qr-display");
+        const qrCodeImg = document.getElementById("qrcode-img");
+        const qrNombre = document.getElementById("qr-nombre");
+
+        crearAlumnoForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const nombre = document.getElementById("alumno-nombre").value;
+            const grupoId = document.getElementById("alumno-grupo-select").value;
+            const grupoNombre = alumnoGrupoSelect.options[alumnoGrupoSelect.selectedIndex].text;
+
+            if (!nombre || !grupoId) return;
+
+            try {
+                await addDoc(alumnosCol, {
+                    nombreCompleto: nombre,
+                    grupoId: grupoId,
+                    grupoNombre: grupoNombre // Denormalizamos para lecturas fáciles
+                });
+                crearAlumnoForm.reset();
+                cargarAlumnos(); // Recarga la lista
+            } catch (error) {
+                console.error("Error al crear alumno:", error);
+            }
+        });
+
+        async function cargarAlumnos() {
+            listaAlumnos.innerHTML = "Cargando...";
+            try {
+                const querySnapshot = await getDocs(alumnosCol);
+                listaAlumnos.innerHTML = ""; // Limpia la lista
+
+                querySnapshot.forEach((doc) => {
+                    const alumno = doc.data();
+                    const id = doc.id;
+                    
+                    const li = document.createElement("li");
+                    li.innerHTML = `
+                        <span>${alumno.nombreCompleto} (${alumno.grupoNombre})</span>
+                        <div class="alumno-botones">
+                            <button class="codigo-btn" data-alumnoid="${id}">Generar Código (Padre)</button>
+                            <button class="qr-btn" data-alumnoid="${id}" data-nombre="${alumno.nombreCompleto}">Ver QR (Asistencia)</button>
+                        </div>
+                    `;
+                    listaAlumnos.appendChild(li);
+                });
+
+                // Añade listeners a los botones de CÓDIGO (para AppPadres)
+                document.querySelectorAll(".codigo-btn").forEach(button => {
+                    button.addEventListener("click", () => {
+                        generarCodigoInvitacion(button.getAttribute("data-alumnoid"));
+                    });
+                });
+
+                // Añade listeners a los botones de QR (para AppAsistencia)
+                document.querySelectorAll(".qr-btn").forEach(button => {
+                    button.addEventListener("click", () => {
+                        mostrarQR(
+                            button.getAttribute("data-alumnoid"),
+                            button.getAttribute("data-nombre")
+                        );
+                    });
+                });
+
+            } catch (error) {
+                console.error("Error al cargar alumnos:", error);
+                listaAlumnos.innerHTML = "Error al cargar alumnos.";
+            }
+        }
+
+        async function generarCodigoInvitacion(alumnoId) {
+            // Genera un código aleatorio simple de 6 caracteres
+            const codigo = Math.random().toString(36).substring(2, 8).toUpperCase();
+            
+            try {
+                // Guarda el código en Firestore
+                await addDoc(codigosCol, {
+                    codigo: codigo,
+                    alumnoId: alumnoId,
+                    usado: false,
+                    fechaCreacion: serverTimestamp()
+                });
+                
+                // Muestra el código al admin (en un prototipo, un alert es suficiente)
+                alert(`Código de invitación (para AppPadres):\n\n${codigo}\n\nEste código es de un solo uso.`);
+                
+            } catch (error) {
+                console.error("Error al generar código:", error);
+                alert("Error al generar el código. Intente de nuevo.");
+            }
+        }
+        
+        // Muestra el QR para la AppAsistencia
+        function mostrarQR(alumnoId, nombre) {
+            qrDisplay.classList.remove("hidden"); // Muestra el div
+            qrCodeImg.innerHTML = ""; // Limpia el QR anterior
+            qrNombre.textContent = `QR de Asistencia para: ${nombre}`;
+            
+            // Genera el QR usando la librería
+            // El QR solo contiene el ID del alumno
+            new QRCode(qrCodeImg, {
+                text: alumnoId,
+                width: 150,
+                height: 150,
+                colorDark : "#000000",
+                colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.H
+            });
+        }
+
+
+        // --- 6. LÓGICA DE GESTIÓN DE AVISOS (ACTUALIZADA) ---
+
+        const crearAvisoForm = document.getElementById("crear-aviso-form");
+        const listaAvisos = document.getElementById("lista-avisos");
+
+        crearAvisoForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const botonSubmit = crearAvisoForm.querySelector('button[type="submit"]');
+            botonSubmit.disabled = true;
+            botonSubmit.textContent = "Enviando...";
+
+            const titulo = document.getElementById("aviso-titulo").value;
+            const mensaje = document.getElementById("aviso-mensaje").value;
+            const destino = document.getElementById("aviso-destino").value;
+
+            // 'destino' será "todos" o un "grupoId"
+            const destinoTipo = (destino === "todos") ? "todos" : "grupo";
+            const destinoId = (destino === "todos")? null : destino;
+
+            try {
+                // 1. Guarda el aviso en Firestore (para que la app lo lea)
+                await addDoc(avisosCol, {
+                    titulo: titulo,
+                    mensaje: mensaje,
+                    destinoTipo: destinoTipo,
+                    destinoId: destinoId,
+                    timestamp: serverTimestamp()
+                });
+                
+                // 2. Llama al servidor Flask para enviar el Push
+                console.log("Enviando notificación push al servidor Flask...");
+                
+                const response = await fetch(`${IP_FLASK}/enviar-aviso`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        titulo: titulo,
+                        mensaje: mensaje,
+                        destino: destino // "todos" o el "grupoId"
+                    })
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.error || "El servidor Flask reportó un error.");
+                }
+
+                const resData = await response.json();
+                console.log("Respuesta del servidor:", resData);
+                
+                crearAvisoForm.reset();
+                cargarAvisos(); // Recarga la lista
+                alert(`¡Éxito! Aviso guardado y notificación enviada a ${resData.success_count || 0} dispositivos.`);
+
+            } catch (error) {
+                console.error("Error al enviar aviso:", error);
+                alert(`Error: El aviso se guardó en la base de datos, pero la notificación push falló.\n(Error: ${error.message})`);
+            } finally {
+                botonSubmit.disabled = false;
+                botonSubmit.textContent = "Guardar y Enviar Notificación";
+            }
+        });
+
+        async function cargarAvisos() {
+            listaAvisos.innerHTML = "Cargando...";
+            try {
+                // TODO: Ordenar por fecha (timestamp)
+                const querySnapshot = await getDocs(avisosCol); 
+                listaAvisos.innerHTML = ""; // Limpia la lista
+
+                querySnapshot.forEach((doc) => {
+                    const aviso = doc.data();
+                    const destino = aviso.destinoTipo === 'todos' ? 'Todos' : `Grupo (${aviso.grupoNombre || 'ID: '+aviso.destinoId})`; 
+                    
+                    const li = document.createElement("li");
+                    li.innerHTML = `
+                        <span>
+                            <strong>${aviso.titulo}</strong> (Destino: ${destino})<br>
+                            <small>${aviso.mensaje}</small>
+                        </span>
+                    `;
+                    listaAvisos.appendChild(li);
+                });
+
+            } catch (error) {
+                console.error("Error al cargar avisos:", error);
+                listaAvisos.innerHTML = "Error al cargar avisos.";
+            }
+        }
+
+        // --- INICIALIZACIÓN ---
+        // (Se llama cuando el auth detecta al usuario)
+
+    </script>
+</body>
+</html>
