@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "182241356835",
+    "project_id": "python-escolar",
+    "storage_bucket": "python-escolar.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:182241356835:android:20426aca73c529e0679596",
+        "android_client_info": {
+          "package_name": "com.marcossoto.apppadres"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCKfEsF-_GL8mGL4ITEHChu_PVt_KkUJTI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:182241356835:android:12b1d53af5835b2a679596",
+        "android_client_info": {
+          "package_name": "ost.exp.exponent"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCKfEsF-_GL8mGL4ITEHChu_PVt_KkUJTI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
