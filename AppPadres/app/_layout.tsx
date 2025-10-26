@@ -2,80 +2,124 @@
 import React, { useState, useEffect } from 'react';
 import { Stack, router, useSegments } from 'expo-router';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from '../firebaseConfig'; // <-- Asegúrate que la ruta sea correcta
-import { registerForPushNotificationsAsync } from '../services/notificationService'; // <-- Asegúrate que la ruta sea correcta
+import { auth, db } from '../firebaseConfig'; 
+import { registerForPushNotificationsAsync } from '../services/notificationService'; 
 import { ActivityIndicator, View } from 'react-native';
+import { doc, onSnapshot } from 'firebase/firestore'; 
 
-// Hook personalizado para manejar la lógica de redirección
-const useProtectedRoute = (user: User | null, loading: boolean) => {
+const useProtectedRoute = (
+  user: User | null,
+  isLinked: boolean | undefined,
+  initialLoadComplete: boolean
+) => {
   const segments = useSegments();
 
   useEffect(() => {
-    if (loading) return; // No hacer nada mientras carga
+    // NO navegamos hasta que la carga inicial esté completa
+    if (!initialLoadComplete) return;
 
-    // Revisa si estamos en una ruta de autenticación (ej. /login)
+    const inAppRoute = segments[0] === '(tabs)';
     const inAuthRoute = ['login', 'registro'].includes(segments[0] || '');
+    const inLinkRoute = segments[0] === 'codigo';
 
     if (!user && !inAuthRoute) {
-      // 1. Si NO hay usuario Y NO está en una ruta de auth -> A /login
       router.replace('/login');
-    
-    } else if (user && (inAuthRoute || segments.length < 1)) {
-
-      // 2. Si SÍ hay usuario Y está en ruta de auth O en la raíz -> A la app
-      // Esta es la línea correcta (compara un número con un número)
-      router.replace('/'); // '/' es la ruta base de (tabs)/index.tsx
+    } else if (user && isLinked === true && !inAppRoute) {
+      router.replace('/');
+    } else if (user && isLinked === false && !inLinkRoute) {
+      router.replace('/codigo');
+    } else if (user && inAuthRoute) {
+      router.replace(isLinked ? '/' : '/codigo');
     }
-    // 3. Si SÍ hay usuario y SÍ está en la app -> no hace nada (se queda)
-    // 4. Si NO hay usuario y SÍ está en ruta de auth -> no hace nada (se queda)
 
-  }, [user, loading, segments]);
+  }, [user, isLinked, initialLoadComplete, segments]);
 };
+
 
 export default function RootLayout() {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isLinked, setIsLinked] = useState<boolean | undefined>(undefined);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
+  // --- ÚNICO HOOK COMBINADO ---
   useEffect(() => {
-    // Listener de Firebase Auth
-    const unsubscribe = onAuthStateChanged(auth, async (authenticatedUser) => {
+    let unsubscribeSnapshot: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (authenticatedUser) => {
       setUser(authenticatedUser);
-      setLoading(false);
+
+      // Limpiamos el listener anterior si existía
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+        unsubscribeSnapshot = null;
+      }
 
       if (authenticatedUser) {
-        // ¡Usuario logueado! Registramos su token FCM
-        console.log('Usuario autenticado:', authenticatedUser.uid);
-        await registerForPushNotificationsAsync(authenticatedUser.uid);
+        // Registro de push token en segundo plano
+        registerForPushNotificationsAsync(authenticatedUser.uid).catch(error => {
+          console.error("Error al registrar token:", error);
+        });
+
+        // Configuramos el listener de Firestore
+        const docRef = doc(db, 'padres', authenticatedUser.uid);
+        
+        unsubscribeSnapshot = onSnapshot(
+          docRef,
+          (docSnap) => {
+            const data = docSnap.data();
+            
+            if (docSnap.exists() && data && data.alumnoVinculado) {
+              console.log('✅ Usuario vinculado');
+              setIsLinked(true);
+            } else {
+              console.log('❌ Usuario NO vinculado');
+              setIsLinked(false);
+            }
+
+            // Marcamos que la carga inicial está completa
+            setInitialLoadComplete(true);
+          },
+          (error) => {
+            console.error("Error al escuchar documento:", error);
+            setIsLinked(false);
+            setInitialLoadComplete(true);
+          }
+        );
+
+      } else {
+        // Sin usuario autenticado
+        setIsLinked(false);
+        setInitialLoadComplete(true);
       }
     });
 
-    // Limpia el listener
-    return () => unsubscribe();
+    // Cleanup
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+      }
+    };
   }, []);
 
   // Hook de protección de rutas
-  useProtectedRoute(user, loading);
+  useProtectedRoute(user, isLinked, initialLoadComplete);
 
-  if (loading) {
-    // Muestra un loader mientras Firebase Auth revisa
+  // CRÍTICO: No renderizamos el Stack hasta saber el estado completo
+  if (!initialLoadComplete) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
         <ActivityIndicator size="large" color="#0000ff" />
       </View>
     );
   }
 
-  // Renderiza el Stack principal
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      {/* Pantallas fuera de las pestañas */}
       <Stack.Screen name="login" />
       <Stack.Screen name="registro" />
       <Stack.Screen name="codigo" />
-      
-      {/* Layout principal de la app (las pestañas) */}
       <Stack.Screen name="(tabs)" /> 
-      
       <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
     </Stack>
   );
