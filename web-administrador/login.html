@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Administrador</title>
+    <style>
+        :root {
+            --bg-primary: #0A0A0A;
+            --bg-secondary: #1A1A1A;
+            --bg-secondary-translucent: rgba(26, 26, 26, 0.9);
+            --border-color: #2A2A2A;
+            --border-focus-color: #555;
+            --text-primary: #F5F5F0;
+            --text-secondary: #B3B3B3;
+            --text-highlight: #FFFFFF;
+            --accent-danger: #FF3B30;
+            --button-primary-bg: #F5F5F0;
+            --button-primary-text: #0A0A0A;
+            --button-hover-bg: #E0E0E0;
+            --input-bg: rgba(16, 16, 16, 0.8);
+            --input-bg-focus: rgba(31, 31, 31, 0.9);
+        }
+
+        html, body {
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .split-container {
+            display: flex;
+            width: 100%;
+            height: 100vh;
+        }
+
+        .left-column {
+            flex: 1;
+            background-color: var(--bg-primary);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+            box-sizing: border-box;
+        }
+
+        .login-box {
+            max-width: 400px;
+            width: 100%;
+            background-color: var(--bg-secondary);
+            padding: 45px;
+            border-radius: 24px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Quitamos los estilos del logo */
+
+        h1 {
+            color: var(--text-primary);
+            /* margin-top: 0; */ /* Resetear margen superior si se quita el logo */
+            margin-bottom: 15px; /* Menos espacio si no hay logo */
+            font-size: 28px; /* Un poco más grande para ser el foco principal */
+            font-weight: 700;
+        }
+
+        /* Nuevo estilo para el texto de instrucción */
+        .login-instructions {
+            color: var(--text-secondary);
+            font-size: 16px;
+            margin-bottom: 35px; /* Espacio antes de los inputs */
+            line-height: 1.5;
+        }
+
+
+        input {
+            width: calc(100% - 28px);
+            padding: 15px 14px;
+            margin-bottom: 20px;
+            border: 1.5px solid var(--border-color);
+            border-radius: 12px;
+            background-color: var(--input-bg);
+            color: var(--text-primary);
+            font-size: 16px;
+            transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        input::placeholder { color: var(--text-secondary); opacity: 0.6; }
+        input:focus {
+            border-color: var(--border-focus-color);
+            outline: none;
+            background-color: var(--input-bg-focus);
+            box-shadow: 0 0 0 3px rgba(85, 85, 85, 0.3);
+        }
+
+        button {
+            background-color: var(--button-primary-bg);
+            color: var(--button-primary-text);
+            width: 100%;
+            margin-top: 20px;
+            padding: 15px 20px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 700;
+            transition: background-color 0.2s ease, opacity 0.2s ease;
+        }
+        button:hover:not(:disabled) { background-color: var(--button-hover-bg); opacity: 1; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; background-color: var(--button-primary-bg); }
+        #login-error { color: var(--accent-danger); margin-top: 20px; font-size: 14px; font-weight: 500; min-height: 20px; }
+
+
+        .right-column {
+            flex: 1;
+            background-image: url('image_a9d6fd.png'); /* Asegúrate que la ruta es correcta */
+            background-size: cover;
+            background-position: center center;
+            background-repeat: no-repeat;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+        .right-column::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(10, 10, 10, 0.65);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 1;
+        }
+        .info-content {
+            position: relative;
+            z-index: 2;
+            max-width: 450px;
+        }
+        .school-name {
+            font-size: 36px;
+            font-weight: bold;
+            color: var(--text-highlight);
+            margin-bottom: 25px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+        .rotating-phrase {
+            font-size: 18px;
+            color: var(--text-secondary);
+            font-style: italic;
+            line-height: 1.6;
+            min-height: 60px;
+            transition: opacity 0.5s ease-in-out;
+             text-shadow: 0 1px 5px rgba(0,0,0,0.4);
+        }
+
+        @media (max-width: 768px) {
+            .split-container {
+                flex-direction: column;
+                height: auto;
+                min-height: 100vh;
+            }
+            .left-column, .right-column {
+                flex: none;
+                width: 100%;
+            }
+            .right-column {
+                min-height: 250px;
+                padding: 60px 20px;
+            }
+            .login-box {
+                margin: 20px 0;
+            }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="split-container">
+        <div class="left-column">
+            <div id="login-container" class="login-box">
+                <h1>Acceso Administrador</h1>
+                <p class="login-instructions">Ingresa tus credenciales para acceder al panel de control.</p>
+                <form id="login-form">
+                    <input type="email" id="login-email" placeholder="Correo electrónico" required autocomplete="email">
+                    <input type="password" id="login-password" placeholder="Contraseña" required autocomplete="current-password">
+                    <button type="submit">Entrar</button>
+                    <p id="login-error"></p>
+                </form>
+            </div>
+        </div>
+        <div class="right-column">
+            <div class="info-content">
+                <h2 class="school-name">Colegio Didactic House</h2>
+                <p id="rotating-phrase" class="rotating-phrase">Cargando frase...</p>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+        const firebaseConfig = {
+             apiKey: "AIzaSyD0ix66ppFXSf7u0Y68LSgKFZgibLaGDps",
+            authDomain: "python-escolar.firebaseapp.com",
+            projectId: "python-escolar",
+            storageBucket: "python-escolar.appspot.com",
+            messagingSenderId: "182241356835",
+            appId: "1:182241356835:web:789db81f76e5e08d679596",
+            measurementId: "G-ZTJQXN0KE2"
+        };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        
+        const loginForm = document.getElementById("login-form");
+        const loginError = document.getElementById("login-error");
+        const submitButton = loginForm.querySelector('button[type="submit"]');
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                window.location.href = 'index.html'; 
+            }
+        });
+
+        loginForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const email = document.getElementById("login-email").value;
+            const password = document.getElementById("login-password").value;
+            loginError.textContent = ""; 
+            submitButton.disabled = true;
+            submitButton.textContent = "Ingresando...";
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+            } catch (error) {
+                console.error("Error de login:", error.message);
+                loginError.textContent = "Correo o contraseña incorrectos.";
+                submitButton.disabled = false;
+                submitButton.textContent = "Entrar";
+            } 
+        });
+
+        const phrases = [
+            "Facilitando la comunicación entre escuela y padres.",
+            "Gestión escolar moderna y eficiente.",
+            "Mantente informado sobre la asistencia de tus hijos.",
+            "La tecnología al servicio de la educación.",
+            "Una herramienta esencial para la comunidad escolar."
+        ];
+        const phraseElement = document.getElementById("rotating-phrase");
+        let currentPhraseIndex = -1;
+
+        function changePhrase() {
+            let nextIndex;
+            do {
+                nextIndex = Math.floor(Math.random() * phrases.length);
+            } while (nextIndex === currentPhraseIndex && phrases.length > 1); 
+
+            currentPhraseIndex = nextIndex;
+            phraseElement.style.opacity = 0; 
+            setTimeout(() => {
+                 phraseElement.textContent = `"${phrases[currentPhraseIndex]}"`;
+                 phraseElement.style.opacity = 1;
+            }, 500); 
+        }
+        changePhrase(); 
+        setInterval(changePhrase, 5000); 
+    </script>
+
+</body>
+</html>
