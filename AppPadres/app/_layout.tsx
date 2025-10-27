@@ -5,8 +5,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '../firebaseConfig'; 
 import { registerForPushNotificationsAsync } from '../services/notificationService'; 
 import { ActivityIndicator, View } from 'react-native';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { StatusBar } from 'expo-status-bar';
+import { doc, onSnapshot } from 'firebase/firestore'; 
 
 const useProtectedRoute = (
   user: User | null,
@@ -109,28 +108,19 @@ export default function RootLayout() {
   // CRÍTICO: No renderizamos el Stack hasta saber el estado completo
   if (!initialLoadComplete) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0A0A0A' }}>
-        <ActivityIndicator size="large" color="#F5F5F0" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+        <ActivityIndicator size="large" color="#0000ff" />
       </View>
     );
   }
 
   return (
-    <>
-      <StatusBar style="light" backgroundColor="transparent" translucent />
-      <Stack 
-        screenOptions={{ 
-          headerShown: false,
-          contentStyle: { backgroundColor: '#0A0A0A' },
-          animation: 'fade',
-        }}
-      >
-        <Stack.Screen name="login" />
-        <Stack.Screen name="registro" />
-        <Stack.Screen name="codigo" />
-        <Stack.Screen name="(tabs)" /> 
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-      </Stack>
-    </>
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="login" />
+      <Stack.Screen name="registro" />
+      <Stack.Screen name="codigo" />
+      <Stack.Screen name="(tabs)" /> 
+      <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+    </Stack>
   );
 }
