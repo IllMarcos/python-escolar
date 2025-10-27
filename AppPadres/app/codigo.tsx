@@ -6,14 +6,12 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
+  // Alert, // <-- Ya no usamos Alert
   ActivityIndicator,
-  Dimensions,
   Keyboard,
-  Platform, // <- Ya no necesitamos KeyboardAvoidingView ni ScrollView
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { auth, db } from '../firebaseConfig'; // <- Revisa que esta ruta sea correcta
+import { auth, db } from '../firebaseConfig';
 import {
   doc,
   updateDoc,
@@ -23,9 +21,9 @@ import {
   getDocs,
 } from 'firebase/firestore';
 import { Feather } from '@expo/vector-icons';
+import CustomAlert from '../components/CustomAlert'; // <-- 1. IMPORTAR
 
-const { width } = Dimensions.get('window');
-const CODE_LENGTH = 6; // <--- CAMBIO: 8 a 6
+const CODE_LENGTH = 6;
 
 const CodigoScreen = () => {
   const insets = useSafeAreaInsets();
@@ -34,61 +32,62 @@ const CodigoScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const [isFocused, setIsFocused] = useState(false);
 
+  // --- 2. AÑADIR ESTADO PARA EL MODAL ---
+  const [isAlertVisible, setIsAlertVisible] = useState(false);
+
   const handleTextChange = (text: string) => {
     setError(null);
     const sanitizedText = text.toUpperCase().replace(/[^A-Z0-9]/g, '');
     setCode(sanitizedText);
   };
 
+  // --- 3. MODIFICAR HANDLERS ---
   const handleLogout = async () => {
+    // Solo muestra el modal, no cierra sesión directamente
+    setIsAlertVisible(true);
+  };
+
+  const confirmLogout = async () => {
+    // Esta es la acción que se ejecuta al confirmar
+    setIsAlertVisible(false);
     try {
       await auth.signOut();
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
-      Alert.alert('Error', 'No se pudo cerrar la sesión.');
     }
   };
 
   const handleSubmit = async () => {
+    // ... (Esta función no cambia en nada) ...
     if (code.length !== CODE_LENGTH) {
-      setError(`El código debe tener ${CODE_LENGTH} caracteres.`); // <-- Ya es dinámico
+      setError(`El código debe tener ${CODE_LENGTH} caracteres.`);
       return;
     }
-    
     Keyboard.dismiss();
     setLoading(true);
     setError(null);
-
     try {
       const user = auth.currentUser;
       if (!user) {
         throw new Error('No hay un usuario autenticado.');
       }
-
       const q = query(collection(db, 'alumnos'), where('codigo', '==', code));
       const querySnapshot = await getDocs(q);
-
       if (querySnapshot.empty) {
         throw new Error('Código no válido o no encontrado.');
       }
-
       const alumnoDoc = querySnapshot.docs[0];
       const alumnoData = alumnoDoc.data();
-
       if (alumnoData.padreId) {
         throw new Error('Este alumno ya está vinculado a otra cuenta.');
       }
-
       const alumnoId = alumnoDoc.id;
-
       await updateDoc(doc(db, 'alumnos', alumnoId), {
         padreId: user.uid,
       });
-
       await updateDoc(doc(db, 'padres', user.uid), {
-        alumnoVinculo: alumnoId, // O 'alumnoVinculado', revisa tu modelo de datos
+        alumnoVinculado: alumnoId,
       });
-
     } catch (error: any) {
       setError(error.message);
       setLoading(false);
@@ -96,12 +95,7 @@ const CodigoScreen = () => {
   };
 
   return (
-    // CAMBIO: Eliminamos KAV y ScrollView.
-    // El wrapper ahora es el contenedor principal.
     <View style={styles.wrapper}>
-      {/* Este 'container' usa flex: 1 y justifyContent: 'center' 
-        para centrar el contenido verticalmente de forma estática. 
-      */}
       <View style={[
         styles.container,
         { 
@@ -109,22 +103,21 @@ const CodigoScreen = () => {
           paddingBottom: insets.bottom + 20 
         }
       ]}>
-        {/* 'content' limita el ancho y centra horizontalmente */}
         <View style={styles.content}>
           
           <View style={styles.headerContainer}>
+            {/* ... (El header no cambia) ... */}
             <View style={styles.iconWrapper}>
               <Feather name="key" size={36} color="#F5F5F0" />
             </View>
             <Text style={styles.title}>Vincular Alumno</Text>
             <Text style={styles.subtitle}>
-              {/* CAMBIO: Texto actualizado a 6 */}
               Ingresa el código de {CODE_LENGTH} caracteres proporcionado por la escuela.
             </Text>
           </View>
 
           <View style={styles.inputSection}>
-            
+            {/* ... (El input y botón de submit no cambian) ... */}
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Código de Vinculación</Text>
               <TextInput
@@ -133,14 +126,13 @@ const CodigoScreen = () => {
                   isFocused && styles.inputFocused,
                   Boolean(error) && styles.inputError
                 ]}
-                // CAMBIO: Placeholder actualizado a 6
                 placeholder="Escribe el código de 6 caracteres"
                 placeholderTextColor="#666666"
                 value={code}
                 onChangeText={handleTextChange}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
-                maxLength={CODE_LENGTH} // <-- Ya es 6
+                maxLength={CODE_LENGTH}
                 autoCapitalize="characters"
                 autoCorrect={false}
                 keyboardType="default"
@@ -168,7 +160,7 @@ const CodigoScreen = () => {
             
             <TouchableOpacity 
               style={styles.logoutButton}
-              onPress={handleLogout} 
+              onPress={handleLogout} // <-- Ya está conectado
               disabled={loading} 
               activeOpacity={0.7}
             >
@@ -178,22 +170,32 @@ const CodigoScreen = () => {
           
         </View>
       </View>
+
+      {/* --- 4. AÑADIR EL COMPONENTE AL RENDER --- */}
+      <CustomAlert
+        visible={isAlertVisible}
+        title="Cerrar Sesión"
+        message="¿Estás seguro de que quieres cerrar sesión?"
+        cancelText="Cancelar"
+        confirmText="Sí, Salir"
+        onClose={() => setIsAlertVisible(false)}
+        onConfirm={confirmLogout}
+      />
     </View>
   );
 };
 
+// ... (Los estilos de codigo.tsx no cambian) ...
 const styles = StyleSheet.create({
   wrapper: {
     flex: 1,
     backgroundColor: '#0A0A0A',
   },
-  // CAMBIO: Este es el nuevo contenedor principal estático
   container: {
-    flex: 1, // Ocupa toda la pantalla
-    justifyContent: 'center', // Centra verticalmente
-    alignItems: 'center', // Centra horizontalmente
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  // CAMBIO: Este contenedor limita el ancho
   content: {
     width: '100%',
     maxWidth: 500,
@@ -214,7 +216,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    fontSize: width > 768 ? 36 : 28,
+    fontSize: 28,
     fontWeight: '700',
     color: '#F5F5F0',
     marginTop: 20,
@@ -222,7 +224,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: width > 768 ? 18 : 16,
+    fontSize: 16,
     color: '#808080',
     fontWeight: '400',
     textAlign: 'center',
@@ -251,11 +253,11 @@ const styles = StyleSheet.create({
     borderColor: '#2A2A2A',
     borderRadius: 12,
     paddingHorizontal: 16,
-    fontSize: 18, // Un poco más grande
+    fontSize: 18,
     color: '#F5F5F0',
     fontWeight: '400',
     textAlign: 'center',
-    letterSpacing: 3, // Espaciado para que parezca código
+    letterSpacing: 3,
   },
   inputFocused: {
     borderColor: '#4A4A4A',

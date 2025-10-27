@@ -1,11 +1,23 @@
 // app/(tabs)/index.tsx
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, ScrollView, RefreshControl } from 'react-native';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  FlatList, 
+  ActivityIndicator, 
+  ScrollView, 
+  RefreshControl,
+  TouchableOpacity,
+  // Alert, // <-- Ya no usamos Alert
+} from 'react-native';
 import { collection, query, where, getDoc, onSnapshot, doc, orderBy, limit, Timestamp } from 'firebase/firestore';
-import { db, auth } from '../../firebaseConfig'; // Ajusta la ruta
-import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { db, auth } from '../../firebaseConfig';
+import { Feather } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import CustomAlert from '../../components/CustomAlert'; // <-- 1. IMPORTAR
 
-// ----- INTERFACES DE DATOS (TypeScript) -----
+// ... (Interfaces y Funciones Helper no cambian) ...
 interface Alumno {
   id: string;
   nombreCompleto: string;
@@ -22,314 +34,459 @@ interface Aviso {
   titulo: string;
   mensaje: string;
 }
-
-// ----- FUNCIÓN HELPER PARA FORMATEAR HORA -----
 const formatTime = (timestamp: Timestamp | null): string => {
   if (!timestamp) return 'N/A';
   return new Date(timestamp.toMillis()).toLocaleTimeString('es-MX', {
     hour: '2-digit',
     minute: '2-digit',
+    hour12: true,
   });
+};
+const formatDate = (timestamp: Timestamp | null): string => {
+  if (!timestamp) return 'N/A';
+  return new Date(timestamp.toMillis()).toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: 'long',
+  });
+};
+const getInitials = (name: string) => {
+  if (!name) return '...';
+  const names = name.split(' ');
+  let initials = names[0].substring(0, 1).toUpperCase();
+  if (names.length > 1) {
+    initials += names[names.length - 1].substring(0, 1).toUpperCase();
+  }
+  return initials;
+};
+type AlumnoStatus = {
+  text: string;
+  color: string;
+  icon: React.ComponentProps<typeof Feather>['name'];
+};
+// ... (Fin de helpers) ...
+
+
+// --- 2. MODIFICAR LOGOUTBUTTON ---
+// Ahora acepta una prop 'onPress'
+const LogoutButton = ({ onPress }: { onPress: () => void }) => {
+  return (
+    <TouchableOpacity onPress={onPress} style={styles.logoutButton}>
+      <Feather name="log-out" size={24} color="#808080" />
+    </TouchableOpacity>
+  );
 };
 
 
 export default function HomeScreen() {
-  // ----- ESTADOS -----
-  const [loading, setLoading] = useState(true); // Para la carga inicial del alumno
-  const [refreshing, setRefreshing] = useState(false); // Para el "pull-to-refresh"
-  
-  const [padreNombre, setPadreNombre] = useState<string>(''); // <-- ¡NUEVO! Para el saludo
+  const insets = useSafeAreaInsets(); 
+
+  // --- 3. AÑADIR ESTADO PARA EL MODAL ---
+  const [isAlertVisible, setIsAlertVisible] = useState(false);
+
+  // --- Lógica de datos (SIN CAMBIOS) ---
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [padreNombre, setPadreNombre] = useState<string>('');
   const [alumno, setAlumno] = useState<Alumno | null>(null);
   const [ultimaAsistencia, setUltimaAsistencia] = useState<Asistencia | null>(null);
   const [asistenciasHoy, setAsistenciasHoy] = useState<Asistencia[]>([]);
   const [avisos, setAvisos] = useState<Aviso[]>([]);
-
   const user = auth.currentUser;
-
-  // ----- FUNCIÓN PRINCIPAL DE CARGA DE DATOS -----
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = React.useCallback(async () => {
     if (!user) return;
-
     try {
-      // 1. OBTENER DATOS DEL PADRE Y ALUMNO (Esto solo se hace una vez)
       const padreRef = doc(db, 'padres', user.uid);
       const padreSnap = await getDoc(padreRef);
       if (!padreSnap.exists()) throw new Error('No se encontró el documento del padre.');
-
-      // --- ¡CORRECCIÓN! Obtenemos el nombre del padre ---
       const padreData = padreSnap.data();
-      setPadreNombre(padreData.nombre || ''); // Guardamos el nombre del tutor
-      // ------------------------------------------------
-      
+      setPadreNombre(padreData.nombre || '');
       const alumnoId = padreData.alumnoVinculado;
       if (!alumnoId) throw new Error('Padre no vinculado.');
-
       const alumnoRef = doc(db, 'alumnos', alumnoId);
       const alumnoSnap = await getDoc(alumnoRef);
       if (!alumnoSnap.exists()) throw new Error('No se encontró el alumno.');
-      
       const alumnoData = alumnoSnap.data() as Alumno;
       alumnoData.id = alumnoSnap.id;
       setAlumno(alumnoData);
-      
-      // Una vez que tenemos al alumno, terminamos la carga inicial
       setLoading(false);
-
     } catch (error) {
       console.error("Error cargando datos estáticos:", error);
-      setLoading(false); // Dejar de cargar incluso si hay error
+      setLoading(false);
     }
-  };
-
-  // ----- EFECTO 1: Carga los datos estáticos (Alumno) al montar -----
+  }, [user]);
   useEffect(() => {
     fetchDashboardData();
-  }, [user]);
-
-  // ----- EFECTO 2: Escucha datos en tiempo real (Asistencias y Avisos) -----
-  // Se activa solo cuando ya tenemos los datos del alumno
+  }, [fetchDashboardData]);
   useEffect(() => {
     if (!alumno) return;
-
-    // --- 2A. Listener para Asistencias de HOY ---
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
     const hoyTimestamp = Timestamp.fromDate(hoy);
-
     const asistenciasQuery = query(
       collection(db, 'asistencias'),
       where('alumnoId', '==', alumno.id),
       where('timestamp', '>=', hoyTimestamp),
       orderBy('timestamp', 'desc')
     );
-
     const unsubAsistencias = onSnapshot(asistenciasQuery, (snapshot) => {
       const asistenciasList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asistencia));
       setAsistenciasHoy(asistenciasList);
-      
-      // Actualiza el "Estado" con el primer registro (el más nuevo)
       setUltimaAsistencia(asistenciasList[0] || null);
     });
-
-    // --- 2B. Listener para Avisos (Globales y del Grupo) ---
     const avisosQuery = query(
       collection(db, 'avisos'),
-      // Buscamos avisos donde el destino sea null (todos) O el ID del grupo
       where('destinoId', 'in', [null, alumno.grupoId]),
       orderBy('timestamp', 'desc'),
-      limit(5) // Solo los 5 más recientes
+      limit(5)
     );
-
     const unsubAvisos = onSnapshot(avisosQuery, (snapshot) => {
       const avisosList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Aviso));
       setAvisos(avisosList);
     });
-
-    // Limpia los listeners al desmontar
     return () => {
       unsubAsistencias();
       unsubAvisos();
     };
-
-  }, [alumno]); // Se re-ejecuta si el alumno cambia
-
-  // ----- HANDLER PARA "PULL TO REFRESH" -----
+  }, [alumno]);
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
-    await fetchDashboardData(); // Re-carga los datos estáticos
-    // Los listeners de tiempo real se actualizarán solos si el alumnoId cambia
+    await fetchDashboardData();
     setRefreshing(false);
-  }, [user]);
+  }, [fetchDashboardData]);
+  // --- FIN DE LÓGICA DE DATOS ---
 
-  // ----- RENDERIZADO -----
+  // --- 4. AÑADIR HANDLERS PARA EL MODAL ---
+  const confirmLogout = async () => {
+    setIsAlertVisible(false);
+    try {
+      await auth.signOut();
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error);
+    }
+  };
+
+  const getAlumnoStatus = (): AlumnoStatus => {
+    if (!ultimaAsistencia) {
+      return { text: 'Sin registros hoy', color: '#4A4A4A', icon: 'slash' };
+    }
+    if (ultimaAsistencia.tipo === 'entrada') {
+      return { text: 'En la escuela', color: '#34C759', icon: 'check-circle' };
+    } else {
+      return { text: 'Fuera de la escuela', color: '#FF9500', icon: 'x-circle' };
+    }
+  };
+  const status = getAlumnoStatus();
 
   if (loading) {
-    return <View style={styles.centered}><ActivityIndicator size="large" color="#007AFF" /></View>;
+    return <View style={styles.centered}><ActivityIndicator size="large" color="#F5F5F0" /></View>;
   }
 
   return (
-    <ScrollView 
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      {/* ----- ¡CORRECCIÓN! Usamos el nombre del padre ----- */}
-      <Text style={styles.title}>Bienvenido, {padreNombre ? padreNombre.split(' ')[0] : ''}</Text>
-      
-      {/* ----- 1. PANEL DE ESTADO ----- */}
-      <View style={styles.statusCard}>
-        <View>
-          <Text style={styles.statusTitle}>{alumno?.nombreCompleto}</Text>
-          <Text style={styles.statusSubtitle}>{alumno?.grupoNombre}</Text>
-        </View>
-        <View style={styles.statusInfo}>
-          {ultimaAsistencia ? (
-            <>
-              <Text style={[styles.statusTime, ultimaAsistencia.tipo === 'entrada' ? styles.statusEntrada : styles.statusSalida]}>
-                {formatTime(ultimaAsistencia.timestamp)}
-              </Text>
-              <Text style={styles.statusLabel}>
-                Última {ultimaAsistencia.tipo === 'entrada' ? 'Entrada' : 'Salida'}
-              </Text>
-            </>
-          ) : (
-            <>
-              <Text style={styles.statusTime}>--:--</Text>
-              <Text style={styles.statusLabel}>Sin registros hoy</Text>
-            </>
-          )}
-        </View>
-      </View>
-
-      {/* ----- 2. ASISTENCIAS DE HOY ----- */}
-      <Text style={styles.sectionTitle}>Asistencias de Hoy</Text>
-      <FlatList
-        data={asistenciasHoy}
-        keyExtractor={(item) => item.id}
-        // --- ¡AQUÍ ESTABA EL ERROR DE SINTAXIS! ---
-        // (Se quitó la comilla simple ' extra)
-        renderItem={({ item }) => (
-          <View style={styles.listItem}>
-            <FontAwesome 
-              name={item.tipo === 'entrada' ? "check-circle" : "arrow-circle-left"} 
-              size={24} 
-              color={item.tipo === 'entrada' ? '#28a745' : '#dc3545'} 
-            />
-            <Text style={styles.listText}>
-              {item.tipo === 'entrada' ? 'Entrada' : 'Salida'} registrada
+    // Usamos un View como wrapper para que el Modal se renderice sobre él
+    <View style={styles.wrapper}>
+      <ScrollView 
+        contentContainerStyle={[
+          styles.container,
+          { paddingBottom: insets.bottom + 20 }
+        ]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#F5F5F0" />}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ----- 1. HEADER PERSONALIZADO ----- */}
+        <View style={[styles.headerContainer, { paddingTop: insets.top + 10 }]}>
+          <View>
+            <Text style={styles.title}>Bienvenido,</Text>
+            <Text style={styles.subtitle}>
+              {padreNombre ? padreNombre.split(' ')[0] : 'Tutor'}
             </Text>
-            <Text style={styles.listTime}>{formatTime(item.timestamp)}</Text>
+          </View>
+          {/* 5. CONECTAR EL BOTÓN AL HANDLER */}
+          <LogoutButton onPress={() => setIsAlertVisible(true)} />
+        </View>
+        
+        {/* ... (El resto de la UI: Tarjeta, Listas, etc. no cambia) ... */}
+        {alumno && (
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{getInitials(alumno.nombreCompleto)}</Text>
+              </View>
+              <View style={styles.infoContainer}>
+                <Text style={styles.nombre}>{alumno.nombreCompleto}</Text>
+                <Text style={styles.gradoGrupo}>{alumno.grupoNombre}</Text>
+              </View>
+            </View>
+            <View style={styles.cardBody}>
+              <Feather name={status.icon} size={48} color={status.color} />
+              <Text style={[styles.statusTextLarge, { color: status.color }]}>
+                {status.text}
+              </Text>
+            </View>
+            <View style={styles.cardFooter}>
+              <Feather name="clock" size={14} color="#808080" />
+              <Text style={styles.statusTime}>
+                Última act. {formatTime(ultimaAsistencia?.timestamp || null)}
+              </Text>
+            </View>
           </View>
         )}
-        ListEmptyComponent={<Text style={styles.emptyText}>No hay registros de asistencia hoy.</Text>}
-        scrollEnabled={false} // Para que no interfiera con el ScrollView principal
-      />
+        <Text style={styles.sectionTitle}>Asistencias de Hoy</Text>
+        <FlatList
+          data={asistenciasHoy}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => {
+            const isEntrada = item.tipo === 'entrada';
+            return (
+              <View style={styles.listItem}>
+                <View style={[
+                  styles.listIconContainer, 
+                  { backgroundColor: isEntrada ? '#34C75920' : '#FF950020' }
+                ]}>
+                  <Feather 
+                    name={isEntrada ? 'log-in' : 'log-out'} 
+                    size={22} 
+                    color={isEntrada ? '#34C759' : '#FF9500'}
+                  />
+                </View>
+                <View style={styles.listTextContainer}>
+                  <Text style={styles.listType}>{isEntrada ? 'Entrada' : 'Salida'}</Text>
+                  <Text style={styles.listDate}>
+                    {formatDate(item.timestamp)}
+                  </Text>
+                </View>
+                <Text style={styles.listTime}>{formatTime(item.timestamp)}</Text>
+              </View>
+            );
+          }}
+          ListEmptyComponent={
+            <View style={styles.emptyListContainer}>
+              <Feather name="archive" size={30} color="#4A4A4A" />
+              <Text style={styles.emptyText}>No hay registros de asistencia hoy.</Text>
+            </View>
+          }
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          scrollEnabled={false}
+        />
+        <Text style={styles.sectionTitle}>Avisos Recientes</Text>
+        <FlatList
+          data={avisos}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <View style={styles.avisoCard}>
+              <View style={styles.avisoHeader}>
+                <Feather name="bell" size={16} color="#B3B3B3" />
+                <Text style={styles.avisoTitle}>{item.titulo}</Text>
+              </View>
+              <Text style={styles.avisoMessage}>{item.mensaje}</Text>
+            </View>
+          )}
+          ListEmptyComponent={
+            <View style={styles.emptyListContainer}>
+              <Feather name="bell-off" size={30} color="#4A4A4A" />
+              <Text style={styles.emptyText}>No hay avisos recientes.</Text>
+            </View>
+          }
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          scrollEnabled={false}
+        />
+      </ScrollView>
 
-      {/* ----- 3. AVISOS RECIENTES ----- */}
-      <Text style={styles.sectionTitle}>Avisos Recientes</Text>
-      <FlatList
-        data={avisos}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.avisoCard}>
-            <Text style={styles.avisoTitle}>{item.titulo}</Text>
-            <Text>{item.mensaje}</Text>
-          </View>
-        )}
-        ListEmptyComponent={<Text style={styles.emptyText}>No hay avisos recientes.</Text>}
-        scrollEnabled={false}
+      {/* --- 6. AÑADIR EL COMPONENTE AL RENDER --- */}
+      <CustomAlert
+        visible={isAlertVisible}
+        title="Cerrar Sesión"
+        message="¿Estás seguro de que quieres cerrar sesión?"
+        cancelText="Cancelar"
+        confirmText="Sí, Salir"
+        onClose={() => setIsAlertVisible(false)}
+        onConfirm={confirmLogout}
       />
-    </ScrollView>
+    </View>
   );
 }
 
-// ----- NUEVOS ESTILOS -----
+// ... (Los estilos de index.tsx no cambian) ...
 const styles = StyleSheet.create({
+  wrapper: {
+    flex: 1,
+    backgroundColor: '#0A0A0A',
+  },
   container: { 
-    flex: 1, 
-    padding: 20, 
-    backgroundColor: '#f4f7f6' 
+    paddingHorizontal: 20, 
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f4f7f6'
+    backgroundColor: '#0A0A0A'
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 5,
+    marginBottom: 16,
   },
   title: { 
     fontSize: 26, 
-    fontWeight: 'bold', 
-    marginBottom: 20,
-    color: '#333'
+    fontWeight: '500', 
+    color: '#808080',
   },
-  // Panel de Estado
-  statusCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 25,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  subtitle: {
+    fontSize: 32, 
+    fontWeight: '700', 
+    color: '#F5F5F0',
   },
-  statusTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-  },
-  statusSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-  },
-  statusInfo: {
-    alignItems: 'flex-end',
-  },
-  statusTime: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  statusLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  statusEntrada: {
-    color: '#28a745', // Verde
-  },
-  statusSalida: {
-    color: '#dc3545', // Rojo
-  },
-  // Títulos de Sección
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 15,
+  logoutButton: {
+    padding: 10,
     marginTop: 10,
   },
-  // Lista de Asistencia
-  listItem: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    padding: 15,
+  card: {
+    backgroundColor: '#1A1A1A', 
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+    overflow: 'hidden',
+  },
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 24,
   },
-  listText: {
-    fontSize: 16,
-    marginLeft: 15,
+  avatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#4A4A4A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+    borderWidth: 2,
+    borderColor: '#808080',
+  },
+  avatarText: {
+    color: '#F5F5F0',
+    fontSize: 24,
+    fontWeight: '700',
+  },
+  infoContainer: {
     flex: 1,
-    color: '#333',
+  },
+  nombre: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#F5F5F0',
+    marginBottom: 4,
+  },
+  gradoGrupo: {
+    fontSize: 16,
+    color: '#808080',
+    fontWeight: '500',
+  },
+  cardBody: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    marginBottom: 20,
+  },
+  statusTextLarge: {
+    fontSize: 22,
+    fontWeight: '700',
+    marginTop: 12,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#2A2A2A',
+    paddingTop: 16,
+  },
+  statusTime: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#808080',
+    marginLeft: 8,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#F5F5F0',
+    marginBottom: 20,
+    marginTop: 10,
+  },
+  listItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    padding: 16,
+  },
+  listIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  listTextContainer: {
+    flex: 1,
+  },
+  listType: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#F5F5F0',
+    marginBottom: 4,
+  },
+  listDate: {
+    fontSize: 14,
+    color: '#808080',
   },
   listTime: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#F5F5F0',
   },
-  // Lista de Avisos
+  separator: {
+    height: 12,
+  },
   avisoCard: { 
-    backgroundColor: '#ffffff', 
-    padding: 15, 
-    borderRadius: 8, 
-    marginBottom: 10, 
+    backgroundColor: '#1A1A1A',
+    padding: 16, 
+    borderRadius: 12, 
     borderWidth: 1, 
-    borderColor: '#eee' 
+    borderColor: '#2A2A2A' 
+  },
+  avisoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   avisoTitle: { 
     fontSize: 16, 
-    fontWeight: 'bold', 
-    marginBottom: 5,
-    color: '#333'
+    fontWeight: '600', 
+    color: '#F5F5F0',
+    marginLeft: 8,
+  },
+  avisoMessage: {
+    fontSize: 14,
+    color: '#B3B3B3',
+    lineHeight: 20,
+  },
+  emptyListContainer: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyText: {
-    textAlign: 'center',
-    color: '#666',
-    paddingVertical: 10,
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#808080',
+    marginTop: 12,
   }
 });
