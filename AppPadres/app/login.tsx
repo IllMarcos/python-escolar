@@ -13,6 +13,7 @@ import {
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebaseConfig';
 import { Link } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
 
@@ -22,6 +23,8 @@ const LoginScreen = () => {
   const [loading, setLoading] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
+  
+  const insets = useSafeAreaInsets();
 
   const handleLogin = async () => {
     if (email === '' || password === '') {
@@ -41,7 +44,13 @@ const LoginScreen = () => {
   return (
     <View style={styles.wrapper}>
       <ScrollView 
-        contentContainerStyle={styles.scrollContainer}
+        contentContainerStyle={[
+          styles.scrollContainer,
+          {
+            paddingTop: insets.top + 20,
+            paddingBottom: insets.bottom + 20,
+          }
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -148,7 +157,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'space-between',
     paddingHorizontal: width > 768 ? '20%' : 24,
-    paddingVertical: height > 800 ? 60 : 40,
+    paddingVertical: height > 800 ? 40 : 20,
     backgroundColor: '#0A0A0A',
     minHeight: height,
   },
